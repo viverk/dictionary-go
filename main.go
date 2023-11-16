@@ -2,17 +2,17 @@ package main
 
 import (
 	"bufio"
+	"estiam/dictionary"
 	"fmt"
 	"os"
-	"strings"
 )
 
 func main() {
-	dict := make(map[string]string)
+	dict := dictionary.New()
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
-		fmt.Println("Choose an action:")
+		fmt.Println("Choisir une action:")
 		fmt.Println("1. Add")
 		fmt.Println("2. Define")
 		fmt.Println("3. Remove")
@@ -20,7 +20,7 @@ func main() {
 		fmt.Println("5. Exit")
 
 		var choice int
-		fmt.Print("quel est votre choix ? : ")
+		fmt.Print("Quel est votre choix ? : ")
 		_, err := fmt.Scanln(&choice)
 		if err != nil {
 			fmt.Println("Erreur:", err)
@@ -37,7 +37,7 @@ func main() {
 		case 4:
 			actionList(dict)
 		case 5:
-			fmt.Println("Retour...")
+			fmt.Println("Retour")
 			return
 		default:
 			fmt.Println("Choix invalide. Entrez un numero entre 1 et 5.")
@@ -45,53 +45,57 @@ func main() {
 	}
 }
 
-func actionAdd(dict map[string]string, reader *bufio.Reader) {
+func actionAdd(d *dictionary.Dictionary, reader *bufio.Reader) {
 	fmt.Print("Entrer un mot à ajouter dans le dico: ")
 	word, _ := reader.ReadString('\n')
-	word = strings.TrimSpace(word)
+	word = word[:len(word)-1]
 
 	fmt.Print("Entrer la definition : ")
 	definition, _ := reader.ReadString('\n')
-	definition = strings.TrimSpace(definition)
+	definition = definition[:len(definition)-1]
 
-	dict[word] = definition
-	fmt.Println("Le mot a bien été ajouté !")
-}
-
-func actionDefine(dict map[string]string, reader *bufio.Reader) {
-	fmt.Print("Quel est le mot dont vous voulez avoir la definition: ")
-	word, _ := reader.ReadString('\n')
-	word = strings.TrimSpace(word) // Nettoyer la chaîne entrée
-
-	definition, found := dict[word]
-	if found {
-		fmt.Printf("Definition de '%s': %s\n", word, definition)
+	err := d.Add(word, definition)
+	if err != nil {
+		fmt.Println("Erreur:", err)
 	} else {
-		fmt.Printf("'%s' le mot est inconnu.\n", word)
+		fmt.Println("Le mot a bien été ajouté !")
 	}
 }
 
-func actionRemove(dict map[string]string, reader *bufio.Reader) {
+func actionDefine(d *dictionary.Dictionary, reader *bufio.Reader) {
+	fmt.Print("Quel est le mot dont vous voulez avoir la definition ? : ")
+	word, _ := reader.ReadString('\n')
+	word = word[:len(word)-1]
+
+	definition, err := d.Get(word)
+	if err != nil {
+		fmt.Println("le mot est inconnu:", err)
+	} else {
+		fmt.Printf("Definition de '%s': %s\n", word, definition)
+	}
+}
+
+func actionRemove(d *dictionary.Dictionary, reader *bufio.Reader) {
 	fmt.Print("Entrer le mot à supprimer du dico: ")
 	word, _ := reader.ReadString('\n')
-	word = strings.TrimSpace(word) // Nettoyer la chaîne entrée
+	word = word[:len(word)-1]
 
-	_, found := dict[word]
-	if found {
-		delete(dict, word)
-		fmt.Println("Le mot a bien été retiré du dico")
+	err := d.Remove(word)
+	if err != nil {
+		fmt.Println("Le mot est inconnu du dico:", err)
 	} else {
-		fmt.Printf("'%s' Le mot est inconnu du dico.\n", word)
+		fmt.Println("Le mot a bien été retiré du dico")
 	}
 }
 
-func actionList(dict map[string]string) {
-	fmt.Println("Contenu du dico:")
-	if len(dict) == 0 {
-		fmt.Println("le dico est vide.")
+func actionList(d *dictionary.Dictionary) {
+	entries, err := d.List()
+	if err != nil {
+		fmt.Println("Erreur:", err)
 		return
 	}
-	for word, definition := range dict {
+	fmt.Println("Contenu du dico:")
+	for word, definition := range entries {
 		fmt.Printf("Mot: %s, Definition: %s\n", word, definition)
 	}
 }
