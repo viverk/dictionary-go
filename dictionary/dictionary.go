@@ -16,16 +16,32 @@ func New() *Dictionary {
 	return &Dictionary{}
 }
 
+const (
+	minWordLength       = 3
+	maxWordLength       = 50
+	minDefinitionLength = 5
+	maxDefinitionLength = 500
+)
+
 func (d *Dictionary) Add(word, definition string) error {
+	// Validate data
+	if len(word) < minWordLength || len(word) > maxWordLength {
+		return fmt.Errorf("word length must be between %d and %d characters", minWordLength, maxWordLength)
+	}
+
+	if len(definition) < minDefinitionLength || len(definition) > maxDefinitionLength {
+		return fmt.Errorf("definition length must be between %d and %d characters", minDefinitionLength, maxDefinitionLength)
+	}
+
 	file, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
-		return err
+		return fmt.Errorf("error opening file: %v", err)
 	}
 	defer file.Close()
 
 	_, err = fmt.Fprintf(file, "%s|%s\n", word, definition)
 	if err != nil {
-		return err
+		return fmt.Errorf("error writing to file: %v", err)
 	}
 	return nil
 }
