@@ -1,101 +1,99 @@
 package main
 
 import (
-	"bufio"
 	"estiam/dictionary"
+	"estiam/middleware"
 	"fmt"
-	"os"
+	"net/http"
+
+	"github.com/gorilla/mux"
 )
 
 func main() {
 	dict := dictionary.New()
-	reader := bufio.NewReader(os.Stdin)
 
-	for {
-		fmt.Println("Choisir une action:")
-		fmt.Println("1. Add")
-		fmt.Println("2. Define")
-		fmt.Println("3. Remove")
-		fmt.Println("4. List")
-		fmt.Println("5. Exit")
+	r := mux.NewRouter()
 
-		var choice int
-		fmt.Print("Quel est votre choix ? : ")
-		_, err := fmt.Scanln(&choice)
-		if err != nil {
-			fmt.Println("Erreur:", err)
-			continue
-		}
+	// Add the authentication middleware to the router
+	r.Use(middleware.AuthenticationMiddleware)
 
-		switch choice {
-		case 1:
-			actionAdd(dict, reader)
-		case 2:
-			actionDefine(dict, reader)
-		case 3:
-			actionRemove(dict, reader)
-		case 4:
-			actionList(dict)
-		case 5:
-			fmt.Println("Retour")
-			return
-		default:
-			fmt.Println("Choix invalide. Entrez un numero entre 1 et 5.")
-		}
-	}
+	// Add the logging middleware to the router
+	r.Use(middleware.LoggingMiddleware)
+
+	// Define routes
+	r.HandleFunc("/add", func(w http.ResponseWriter, r *http.Request) {
+		actionAdd(dict, w, r)
+	}).Methods("POST")
+
+	r.HandleFunc("/define/{word}", func(w http.ResponseWriter, r *http.Request) {
+		actionDefine(dict, w, r)
+	}).Methods("GET")
+
+	r.HandleFunc("/remove/{word}", func(w http.ResponseWriter, r *http.Request) {
+		actionRemove(dict, w, r)
+	}).Methods("DELETE")
+
+	r.HandleFunc("/list", func(w http.ResponseWriter, r *http.Request) {
+		actionList(dict, w, r)
+	}).Methods("GET")
+
+	// Start the server
+	http.Handle("/", r)
+	fmt.Println("Server is running on port 8080")
+	http.ListenAndServe(":8080", nil)
 }
 
-func actionAdd(d *dictionary.Dictionary, reader *bufio.Reader) {
-	fmt.Print("Entrer un mot à ajouter dans le dico: ")
-	word, _ := reader.ReadString('\n')
-	word = word[:len(word)-1]
-
-	fmt.Print("Entrer la definition : ")
-	definition, _ := reader.ReadString('\n')
-	definition = definition[:len(definition)-1]
+func actionAdd(d *dictionary.Dictionary, w http.ResponseWriter, r *http.Request) {
+	word := r.FormValue("word")
+	definition := r.FormValue("definition")
 
 	err := d.Add(word, definition)
 	if err != nil {
-		fmt.Println("Erreur:", err)
-	} else {
-		fmt.Println("Le mot a bien été ajouté !")
+		http.Error(w, fmt.Sprintf("Error: %s", err), http.StatusBadRequest)
+		return
 	}
+
+	fmt.Fprintln(w, "Le mot a bien été ajouté !")
 }
 
-func actionDefine(d *dictionary.Dictionary, reader *bufio.Reader) {
-	fmt.Print("Quel est le mot dont vous voulez avoir la definition ? : ")
-	word, _ := reader.ReadString('\n')
-	word = word[:len(word)-1]
+// Update actionDefine function
+func actionDefine(d *dictionary.Dictionary, w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	word := vars["word"]
 
 	definition, err := d.Get(word)
 	if err != nil {
-		fmt.Println("le mot est inconnu:", err)
-	} else {
-		fmt.Printf("Definition de '%s': %s\n", word, definition)
+		http.Error(w, fmt.Sprintf("Le mot est inconnu: %s", err), http.StatusNotFound)
+		return
 	}
+
+	fmt.Fprintf(w, "Definition de '%s': %s\n", word, definition)
 }
 
-func actionRemove(d *dictionary.Dictionary, reader *bufio.Reader) {
-	fmt.Print("Entrer le mot à supprimer du dico: ")
-	word, _ := reader.ReadString('\n')
-	word = word[:len(word)-1]
+// Update actionRemove function
+func actionRemove(d *dictionary.Dictionary, w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	word := vars["word"]
 
 	err := d.Remove(word)
 	if err != nil {
-		fmt.Println("Le mot est inconnu du dico:", err)
-	} else {
-		fmt.Println("Le mot a bien été retiré du dico")
-	}
-}
-
-func actionList(d *dictionary.Dictionary) {
-	entries, err := d.List()
-	if err != nil {
-		fmt.Println("Erreur:", err)
+		http.Error(w, fmt.Sprintf("Le mot est inconnu du dico: %s", err), http.StatusNotFound)
 		return
 	}
-	fmt.Println("Contenu du dico:")
+
+	fmt.Fprintln(w, "Le mot a bien été retiré du dico")
+}
+
+// Update actionList function
+func actionList(d *dictionary.Dictionary, w http.ResponseWriter, r *http.Request) {
+	entries, err := d.List()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Erreur: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprintln(w, "Contenu du dico:")
 	for word, definition := range entries {
-		fmt.Printf("Mot: %s, Definition: %s\n", word, definition)
+		fmt.Fprintf(w, "Mot: %s, Definition: %s\n", word, definition)
 	}
 }

@@ -1,2 +1,3 @@
 maxence|bonjour
 ange|creature divine
+test|testDefinition
