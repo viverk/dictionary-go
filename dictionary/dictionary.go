@@ -90,6 +90,12 @@ func (d *Dictionary) Remove(word string) error {
 			return fmt.Errorf("bucket not found")
 		}
 
+		// Check if the word exists in the dictionary
+		if val := bucket.Get([]byte(word)); val == nil {
+			return fmt.Errorf("word not found")
+		}
+
+		// Remove the word from the dictionary
 		return bucket.Delete([]byte(word))
 	})
 }

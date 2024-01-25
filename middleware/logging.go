@@ -22,6 +22,6 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		duration := end.Sub(start)
 
 		// Log the request information
-		log.Printf("%s - %s %s %s %v", r.RemoteAddr, r.Method, r.RequestURI, r.Proto, duration)
+		log.Printf("Client: %s - Method: %s - URI: %s - Protocol: %s - Duration: %v", r.RemoteAddr, r.Method, r.RequestURI, r.Proto, duration)
 	})
 }
