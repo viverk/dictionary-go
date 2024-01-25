@@ -1,3 +1,5 @@
 maxence|bonjour
 ange|creature divine
 test|testDefinition
+jouet|objet pour enfant
+jouet|objet pour enfant

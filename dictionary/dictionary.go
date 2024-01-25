@@ -1,19 +1,39 @@
 package dictionary
 
 import (
-	"bufio"
 	"fmt"
-	"os"
-	"strings"
+
+	"github.com/boltdb/bolt"
 )
 
-const filename = "dictionary.txt"
+const dbFile = "dictionary.db"
+const bucketName = "entries"
 
 type Dictionary struct {
+	db *bolt.DB
 }
 
-func New() *Dictionary {
-	return &Dictionary{}
+func New() (*Dictionary, error) {
+	// Open the BoltDB database file
+	db, err := bolt.Open(dbFile, 0600, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error opening database: %v", err)
+	}
+
+	// Create a bucket if it doesn't exist
+	err = db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte(bucketName))
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error creating bucket: %v", err)
+	}
+
+	return &Dictionary{db: db}, nil
+}
+
+func (d *Dictionary) Close() {
+	d.db.Close()
 }
 
 const (
@@ -24,128 +44,68 @@ const (
 )
 
 func (d *Dictionary) Add(word, definition string) error {
+
 	// Validate data
 	if len(word) < minWordLength || len(word) > maxWordLength {
-		return fmt.Errorf("word length must be between %d and %d characters", minWordLength, maxWordLength)
+		return fmt.Errorf("La taille du mot doit etre entre %d et %d caractere", minWordLength, maxWordLength)
 	}
 
 	if len(definition) < minDefinitionLength || len(definition) > maxDefinitionLength {
-		return fmt.Errorf("definition length must be between %d and %d characters", minDefinitionLength, maxDefinitionLength)
+		return fmt.Errorf("La taille de la definition doit etre entre %d et %d caractere", minDefinitionLength, maxDefinitionLength)
 	}
 
-	file, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
-	if err != nil {
-		return fmt.Errorf("error opening file: %v", err)
-	}
-	defer file.Close()
+	return d.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(bucketName))
+		if bucket == nil {
+			return fmt.Errorf("bucket not found")
+		}
 
-	_, err = fmt.Fprintf(file, "%s|%s\n", word, definition)
-	if err != nil {
-		return fmt.Errorf("error writing to file: %v", err)
-	}
-	return nil
+		return bucket.Put([]byte(word), []byte(definition))
+	})
 }
 
 func (d *Dictionary) Get(word string) (string, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		parts := strings.Split(line, "|")
-		if len(parts) == 2 && parts[0] == word {
-			return parts[1], nil
+	var result string
+	err := d.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(bucketName))
+		if bucket == nil {
+			return fmt.Errorf("bucket not found")
 		}
-	}
 
-	if err := scanner.Err(); err != nil {
-		return "", err
-	}
-	return "", fmt.Errorf("word not found")
+		val := bucket.Get([]byte(word))
+		if val == nil {
+			return fmt.Errorf("word not found")
+		}
+
+		result = string(val)
+		return nil
+	})
+	return result, err
 }
 
 func (d *Dictionary) Remove(word string) error {
-	lines, err := readLines(filename)
-	if err != nil {
-		return err
-	}
-
-	var newLines []string
-	removed := false
-	for _, line := range lines {
-		parts := strings.Split(line, "|")
-		if len(parts) != 2 || parts[0] != word {
-			newLines = append(newLines, line)
-		} else {
-			removed = true
+	return d.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(bucketName))
+		if bucket == nil {
+			return fmt.Errorf("bucket not found")
 		}
-	}
 
-	if !removed {
-		return fmt.Errorf("word not found")
-	}
-
-	if err := writeLines(filename, newLines); err != nil {
-		return err
-	}
-	return nil
+		return bucket.Delete([]byte(word))
+	})
 }
 
 func (d *Dictionary) List() (map[string]string, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
 	result := make(map[string]string)
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		parts := strings.Split(line, "|")
-		if len(parts) == 2 {
-			result[parts[0]] = parts[1]
+	err := d.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(bucketName))
+		if bucket == nil {
+			return fmt.Errorf("bucket not found")
 		}
-	}
 
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-func readLines(filename string) ([]string, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	var lines []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	return lines, nil
-}
-
-func writeLines(filename string, lines []string) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	writer := bufio.NewWriter(file)
-	for _, line := range lines {
-		fmt.Fprintln(writer, line)
-	}
-	return writer.Flush()
+		return bucket.ForEach(func(k, v []byte) error {
+			result[string(k)] = string(v)
+			return nil
+		})
+	})
+	return result, err
 }

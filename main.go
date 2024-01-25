@@ -10,7 +10,13 @@ import (
 )
 
 func main() {
-	dict := dictionary.New()
+	// Initialize the dictionary with BoltDB
+	dict, err := dictionary.New()
+	if err != nil {
+		fmt.Printf("Error initializing dictionary: %v\n", err)
+		return
+	}
+	defer dict.Close()
 
 	r := mux.NewRouter()
 
@@ -56,7 +62,6 @@ func actionAdd(d *dictionary.Dictionary, w http.ResponseWriter, r *http.Request)
 	fmt.Fprintln(w, "Le mot a bien été ajouté !")
 }
 
-// Update actionDefine function
 func actionDefine(d *dictionary.Dictionary, w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	word := vars["word"]
@@ -70,7 +75,6 @@ func actionDefine(d *dictionary.Dictionary, w http.ResponseWriter, r *http.Reque
 	fmt.Fprintf(w, "Definition de '%s': %s\n", word, definition)
 }
 
-// Update actionRemove function
 func actionRemove(d *dictionary.Dictionary, w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	word := vars["word"]
@@ -84,7 +88,6 @@ func actionRemove(d *dictionary.Dictionary, w http.ResponseWriter, r *http.Reque
 	fmt.Fprintln(w, "Le mot a bien été retiré du dico")
 }
 
-// Update actionList function
 func actionList(d *dictionary.Dictionary, w http.ResponseWriter, r *http.Request) {
 	entries, err := d.List()
 	if err != nil {
